@@ -37,10 +37,10 @@ public class BackupManagerTest {
         }
         @Override public Object deleteApiClientServersServerBackupsBackup(UUID server, UUID backup) throws ApiException {
             if (fail) throw new ApiException(403, "denied");
-            deleted.add(backup); return null;
+            deleted.add(backup); backups.removeIf(b -> b.getUuid().equals(backup)); return null;
         }
         @Override public GetApiAdminNodesNodeBackupsBackup200Response postApiClientServersServerBackups(
-                UUID server, PostApiClientServersServerBackupsRequest request) {
+                UUID server, PostApiClientServersServerBackupsRequest request) throws ApiException {
             assertNotNull(request.getName());
             assertTrue(request.getIgnoredFiles().isEmpty());
             created++;
@@ -109,6 +109,68 @@ public class BackupManagerTest {
         try { manager.BackUpAll(); fail("Expected batch to stop"); }
         catch (ApiException expected) { assertEquals(400, expected.getCode()); }
         assertEquals(1, calls.get());
+    }    @Test public void waitsForAsynchronousDeletionWithoutDeletingAgain() throws Exception {
+        var api = new FakeApi() {
+            @Override public Object deleteApiClientServersServerBackupsBackup(UUID server, UUID backup) {
+                deleted.add(backup);
+                return null;
+            }
+        };
+        api.backup(false, 0); api.backup(false, 1);
+        var waits = new java.util.concurrent.atomic.AtomicInteger();
+        new BackupManager(api, () -> {
+            assertEquals(0, api.created);
+            if (waits.incrementAndGet() == 2) api.backups.remove(0);
+        }).BackUp(api.id);
+        assertEquals(2, waits.get());
+        assertEquals(1, api.deleted.size());
+        assertEquals(1, api.created);
+    }
+    @Test public void retriesCapacityRejectionWithoutAdditionalDeletion() throws Exception {
+        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        var api = new FakeApi() {
+            @Override public GetApiAdminNodesNodeBackupsBackup200Response postApiClientServersServerBackups(
+                    UUID server, PostApiClientServersServerBackupsRequest request) throws ApiException {
+                if (attempts.incrementAndGet() < 3)
+                    throw new ApiException(417, "full", java.util.Map.of(),
+                            "{\"errors\":[\"maximum number of backups reached\"]}");
+                return super.postApiClientServersServerBackups(server, request);
+            }
+        };
+        api.backup(false, 0); api.backup(false, 1);
+        new BackupManager(api, () -> {}).BackUp(api.id);
+        assertEquals(3, attempts.get()); assertEquals(1, api.created);
+        assertEquals(1, api.deleted.size());
+    }
+    @Test public void capacityWaitIsBounded() throws Exception {
+        var api = new FakeApi() {
+            @Override public Object deleteApiClientServersServerBackupsBackup(UUID server, UUID backup) {
+                deleted.add(backup); return null;
+            }
+        };
+        api.backup(false, 0); api.backup(false, 1);
+        var waits = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            new BackupManager(api, () -> waits.incrementAndGet()).BackUp(api.id);
+            fail("Expected timeout");
+        } catch (ApiException expected) {
+            assertTrue(expected.getMessage().contains("Timed out"));
+        }
+        assertEquals(30, waits.get()); assertEquals(0, api.created);
+        assertEquals(1, api.deleted.size());
+    }
+    @Test public void unrelatedCreationErrorIsNotRetried() throws Exception {
+        var api = new FakeApi() {
+            @Override public GetApiAdminNodesNodeBackupsBackup200Response postApiClientServersServerBackups(
+                    UUID server, PostApiClientServersServerBackupsRequest request) throws ApiException {
+                throw new ApiException(500, "failure");
+            }
+        };
+        try {
+            new BackupManager(api, () -> fail("Must not retry")).BackUp(api.id);
+            fail("Expected API error");
+        } catch (ApiException expected) { assertEquals(500, expected.getCode()); }
     }}
+
 
 

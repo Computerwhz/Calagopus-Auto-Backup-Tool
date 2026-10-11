@@ -7,6 +7,7 @@ com\computerwhz\BackupTimer.class
 com\computerwhz\BackupManager.class
 com\computerwhz\command\HelpCommand.class
 com\computerwhz\CalagopusManager.class
+com\computerwhz\BackupManager$Pause.class
 com\computerwhz\command\BackupCommand.class
 com\computerwhz\command\BackupAllCommand.class
 com\computerwhz\Main.class

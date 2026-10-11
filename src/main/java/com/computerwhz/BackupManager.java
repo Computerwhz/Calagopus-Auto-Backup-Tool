@@ -12,13 +12,23 @@ import java.util.UUID;
 public class BackupManager {
     private static final long PAGE_SIZE = 100L;
     private final ApiClientApi api;
+    private static final int CAPACITY_CHECKS = 30;
+    private final Pause pause;
+
+    @FunctionalInterface
+    interface Pause { void await() throws InterruptedException; }
 
     public BackupManager(ApiClient client) {
         this(new ApiClientApi(client));
     }
 
     BackupManager(ApiClientApi api) {
+        this(api, () -> Thread.sleep(2_000));
+    }
+
+    BackupManager(ApiClientApi api, Pause pause) {
         this.api = api;
+        this.pause = pause;
     }
 
     public List<Server> getServers() throws ApiException {
@@ -70,11 +80,36 @@ public class BackupManager {
         for (int i = 0; i < toDelete; i++) {
             var backup = unlocked.get(i);
             api.deleteApiClientServersServerBackupsBackup(serverId, backup.getUuid());
-            System.out.println("Deleted oldest unlocked backup: " + backup.getName() + " on " + name);
+            System.out.println("Deletion requested for oldest unlocked backup: " + backup.getName() + " on " + name);
         }
         String backupName = "Auto Backup tool at " + System.currentTimeMillis();
-        api.postApiClientServersServerBackups(serverId,
-                new PostApiClientServersServerBackupsRequest().name(backupName).ignoredFiles(List.of()));
+        var request = new PostApiClientServersServerBackupsRequest().name(backupName).ignoredFiles(List.of());
+        for (int attempt = 0; ; attempt++) {
+            // A successful DELETE only acknowledges asynchronous deletion.
+            boolean capacityAvailable = toDelete == 0 || getBackups(serverId).size() < limit;
+            if (capacityAvailable) {
+                try {
+                    api.postApiClientServersServerBackups(serverId, request);
+                    break;
+                } catch (ApiException e) {
+                    // Only retry a definite capacity rejection, never an ambiguous
+                    // transport failure that might already have created a backup.
+                    String body = e.getResponseBody();
+                    if (e.getCode() != 417 || body == null
+                            || !body.contains("maximum number of backups reached")) throw e;
+                    if (attempt >= CAPACITY_CHECKS) throw e;
+                }
+            } else if (attempt >= CAPACITY_CHECKS) {
+                throw new ApiException("Timed out waiting for backup capacity on " + name);
+            }
+            if (attempt == 0) System.out.println("Waiting for backup capacity on " + name + "...");
+            try {
+                pause.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ApiException(e);
+            }
+        }
         System.out.println("Backup request accepted: " + backupName + " on " + name + " (" + serverId + ")");
     }
 
@@ -88,4 +123,5 @@ public class BackupManager {
         }
     }
 }
+
 
