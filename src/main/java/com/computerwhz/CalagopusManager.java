@@ -17,6 +17,7 @@ public class CalagopusManager {
 
         auth.setApiKey(apiKey);
         auth.setApiKeyPrefix("Bearer");
+        client.addDefaultHeader("Authorization", "Bearer " + apiKey);
     }
 
     public ApiClient getClient() {

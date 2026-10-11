@@ -1,0 +1,5 @@
+# Created at 2026-10-11T19:25:03.924
+Boot Manifest-JAR contains absolute paths in classpath 'D:\Calagopus-Auto-Backup-Tool\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+
