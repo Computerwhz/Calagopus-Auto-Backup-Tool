@@ -23,6 +23,14 @@ public class BackupTimer {
                     else Main.getBackupManager().BackUp(server);
                 } catch (Exception e) {
                     System.err.println("Scheduled backup failed: " + e.getMessage());
+                    if (e instanceof com.computerwhz.calagopus.ApiException apiError
+                            && (apiError.getCode() == 400 || apiError.getCode() == 415)) {
+                        synchronized (BackupTimer.this) {
+                            scheduled.cancel();
+                            if (timer == scheduled) timer = null;
+                        }
+                        System.err.println("Timer stopped after a rejected request; fix the error before restarting it.");
+                    }
                 } finally {
                     if (!repeat) {
                         synchronized (BackupTimer.this) {
@@ -44,3 +52,4 @@ public class BackupTimer {
 
     public synchronized boolean isRunning() { return timer != null; }
 }
+

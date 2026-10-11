@@ -24,4 +24,16 @@ public class CalagopusManagerTest {
             assertEquals("panel.example.com", call.request().url().host());
         }
     }
-}
+    @Test public void backupCreationSendsExactJsonContentTypeAndUtf8Body() throws Exception {
+        var client = new CalagopusManager("http://127.0.0.1", "test-key").getClient();
+        var api = new ApiClientApi(client);
+        var request = api.postApiClientServersServerBackupsCall(UUID.randomUUID(),
+                new PostApiClientServersServerBackupsRequest().name("Backup café").ignoredFiles(List.of()), null).request();
+        assertEquals("application/json", request.body().contentType().toString());
+        var buffer = new okio.Buffer();
+        request.body().writeTo(buffer);
+        var json = com.google.gson.JsonParser.parseString(buffer.readUtf8()).getAsJsonObject();
+        assertEquals("Backup café", json.get("name").getAsString());
+        assertEquals(0, json.getAsJsonArray("ignored_files").size());
+    }}
+

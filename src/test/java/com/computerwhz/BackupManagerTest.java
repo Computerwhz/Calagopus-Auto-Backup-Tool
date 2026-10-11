@@ -97,5 +97,18 @@ public class BackupManagerTest {
             timer.runTimer(60000, false, null); assertTrue(timer.isRunning());
         } finally { timer.stopTimer(); }
     }
-}
+    @Test public void rejectedPayloadStopsBatchBeforeNextServer() throws Exception {
+        var api = new FakeApi();
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var manager = new BackupManager(api) {
+            @Override public synchronized void BackUp(UUID id) throws ApiException {
+                calls.incrementAndGet();
+                throw new ApiException(400, "unsupported content type");
+            }
+        };
+        try { manager.BackUpAll(); fail("Expected batch to stop"); }
+        catch (ApiException expected) { assertEquals(400, expected.getCode()); }
+        assertEquals(1, calls.get());
+    }}
+
 

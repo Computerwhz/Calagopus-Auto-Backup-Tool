@@ -34,7 +34,13 @@ public class BackupManager {
         for (Server server : getServers()) {
             try {
                 BackUp(server.getUuid());
-            } catch (ApiException | RuntimeException e) {
+            } catch (ApiException e) {
+                if (e.getCode() == 400 || e.getCode() == 415) {
+                    System.err.println("Stopping backupall after a rejected request on " + server.getName());
+                    throw e;
+                }
+                System.err.println("Failed to back up " + server.getName() + ": " + e.getMessage());
+            } catch (RuntimeException e) {
                 System.err.println("Failed to back up " + server.getName() + ": " + e.getMessage());
             }
         }
@@ -82,3 +88,4 @@ public class BackupManager {
         }
     }
 }
+
