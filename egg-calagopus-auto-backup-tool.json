@@ -1,0 +1,72 @@
+{
+  "uuid": "e69d2334-f5f4-4b53-9e5a-0d69155e1258",
+  "name": "Calagopus Auto Backup Tool",
+  "description": "Create and schedule Calagopus server backups using a client API key. Use help in the console for commands.",
+  "author": "admin@computerwhz.co.uk",
+  "config": {
+    "files": {},
+    "startup": {
+      "done": [
+        "Calagopus client configured"
+      ],
+      "strip_ansi": false
+    },
+    "stop": {
+      "type": "command",
+      "value": "exit"
+    }
+  },
+  "scripts": {
+    "installation": {
+      "container": "alpine:3.19",
+      "entrypoint": "ash",
+      "content": "#!/bin/sh\nset -eu\n\ncd /mnt/server\napk add --no-cache curl jq\n\necho \"Finding the latest Calagopus backup tool release...\"\nRELEASE=$(curl --fail --silent --show-error --location https://api.github.com/repos/Computerwhz/Calagopus-Auto-Backup-Tool/releases/latest)\nURL=$(printf '%s' \"$RELEASE\" | jq -r '[.assets[] | select(.name | test(\"^Calagopus-Auto-Backup-Tool(-[0-9][A-Za-z0-9._-]*)?\\\\.jar$\")) | .browser_download_url][0] // empty')\n\nif [ -z \"$URL\" ]; then\n    echo \"No Calagopus-Auto-Backup-Tool JAR found in the latest release. Publish the built Calagopus JAR before installing.\" >&2\n    exit 1\nfi\n\nTEMP_JAR=$(mktemp ./Calagopus-Auto-Backup-Tool.jar.XXXXXX)\ntrap 'rm -f \"$TEMP_JAR\"' EXIT\ncurl --fail --show-error --location \"$URL\" -o \"$TEMP_JAR\"\ntest -s \"$TEMP_JAR\"\nmv \"$TEMP_JAR\" Calagopus-Auto-Backup-Tool.jar\n\necho \"Installed:\"\nls -lh Calagopus-Auto-Backup-Tool.jar"
+    }
+  },
+  "startup_commands": {
+    "Default": "java -jar Calagopus-Auto-Backup-Tool.jar --panelurl \"${PANEL_URL}\" --apikey \"${API_KEY}\""
+  },
+  "force_outgoing_ip": false,
+  "separate_port": false,
+  "features": [],
+  "docker_images": {
+    "Java 21": "ghcr.io/pterodactyl/yolks:java_21"
+  },
+  "file_denylist": [],
+  "variables": [
+    {
+      "name": "Panel URL",
+      "name_translations": {},
+      "description": "Calagopus panel base URL, for example https://panel.example.com (without /api/client).",
+      "description_translations": {},
+      "order": 0,
+      "env_variable": "PANEL_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": false,
+      "secret": false,
+      "rules": [
+        "required",
+        "string",
+        "max:255"
+      ]
+    },
+    {
+      "name": "API Key",
+      "name_translations": {},
+      "description": "Calagopus client API key with permission to list servers and list, create, and delete backups.",
+      "description_translations": {},
+      "order": 0,
+      "env_variable": "API_KEY",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": false,
+      "secret": true,
+      "rules": [
+        "required",
+        "string",
+        "max:255"
+      ]
+    }
+  ]
+}
