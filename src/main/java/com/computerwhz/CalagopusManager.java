@@ -5,6 +5,11 @@ import com.computerwhz.calagopus.auth.ApiKeyAuth;
 
 public class CalagopusManager {
 
+    static {
+        // Panel responses now include bandwidth.
+        com.computerwhz.calagopus.model.ServerLimits.openapiFields.add("bandwidth");
+    }
+
     private final ApiClient client;
 
     public CalagopusManager(String panelUrl, String apiKey) {
@@ -37,4 +42,5 @@ public class CalagopusManager {
         return client;
     }
 }
+
 
